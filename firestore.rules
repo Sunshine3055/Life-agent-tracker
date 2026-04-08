@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - role: string (required, ['admin', 'agent'])
+    //
+    // Collection: cases
+    // Document ID: caseId
+    // Fields:
+    //   - clientName: string (required, 1-100 chars)
+    //   - policyType: string (required, ['Life Insurance', 'Annuity'])
+    //   - carrier: string (required, 1-100 chars)
+    //   - status: string (required, ['Pending', 'Underwriting', 'Approved', 'Issued', 'Declined'])
+    //   - amount: number (required, positive)
+    //   - submissionDate: timestamp (required)
+    //   - lastFollowUp: timestamp (optional)
+    //   - nextFollowUp: timestamp (optional)
+    //   - ownerId: string (required, matches auth.uid)
+    //   - notes: string (optional, max 5000 chars)
+    //
+    // Collection: cases/{caseId}/followUps
+    // Document ID: followUpId
+    // Fields:
+    //   - caseId: string (required)
+    //   - date: timestamp (required)
+    //   - notes: string (required, 1-5000 chars)
+    //   - actionTaken: string (required, 1-100 chars)
+    //   - ownerId: string (required, matches auth.uid)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "Shanshanli3055@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['email', 'role']) &&
+             hasOnlyAllowedFields(['email', 'displayName', 'role']) &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'agent'] &&
+             (data.displayName == null || (data.displayName is string && data.displayName.size() <= 100));
+    }
+
+    function isValidCase(data) {
+      return hasRequiredFields(['clientName', 'policyType', 'carrier', 'status', 'amount', 'submissionDate', 'ownerId']) &&
+             hasOnlyAllowedFields(['clientName', 'policyType', 'carrier', 'status', 'amount', 'submissionDate', 'lastFollowUp', 'nextFollowUp', 'ownerId', 'notes']) &&
+             data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 100 &&
+             data.policyType in ['Life Insurance', 'Annuity'] &&
+             data.carrier is string && data.carrier.size() >= 1 && data.carrier.size() <= 100 &&
+             data.status in ['Pending', 'Underwriting', 'Approved', 'Issued', 'Declined'] &&
+             data.amount is number && data.amount >= 0 &&
+             data.submissionDate is timestamp &&
+             (data.lastFollowUp == null || data.lastFollowUp is timestamp) &&
+             (data.nextFollowUp == null || data.nextFollowUp is timestamp) &&
+             data.ownerId == request.auth.uid &&
+             (data.notes == null || (data.notes is string && data.notes.size() <= 5000));
+    }
+
+    function isValidFollowUp(data) {
+      return hasRequiredFields(['caseId', 'date', 'notes', 'actionTaken', 'ownerId']) &&
+             hasOnlyAllowedFields(['caseId', 'date', 'notes', 'actionTaken', 'ownerId']) &&
+             data.caseId is string &&
+             data.date is timestamp &&
+             data.notes is string && data.notes.size() >= 1 && data.notes.size() <= 5000 &&
+             data.actionTaken is string && data.actionTaken.size() >= 1 && data.actionTaken.size() <= 100 &&
+             data.ownerId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'agent' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /cases/{caseId} {
+      allow read: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidCase(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()) && isValidCase(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+
+      match /followUps/{followUpId} {
+        allow read: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidFollowUp(request.resource.data);
+        allow update: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()) && isValidFollowUp(request.resource.data);
+        allow delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

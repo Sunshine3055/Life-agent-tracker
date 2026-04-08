@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-[#F8F9FA] text-[#1A1A1A] font-sans;
+  }
+}
+
+@layer components {
+  .bloomberg-grid {
+    @apply border-collapse;
+  }
+  .bloomberg-grid th {
+    @apply border border-gray-200 bg-gray-50 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500;
+  }
+  .bloomberg-grid td {
+    @apply border border-gray-100 px-4 py-3 text-sm;
+  }
+}

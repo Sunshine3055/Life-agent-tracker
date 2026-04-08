@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "Case": {
+      "title": "Insurance Case",
+      "description": "A life insurance or annuity case record",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "description": "Name of the client" },
+        "policyType": { "type": "string", "enum": ["Life Insurance", "Annuity"], "description": "Type of policy" },
+        "carrier": { "type": "string", "description": "Insurance carrier name" },
+        "status": { "type": "string", "enum": ["Pending", "Underwriting", "Approved", "Issued", "Declined"], "description": "Current status of the case" },
+        "amount": { "type": "number", "description": "Policy amount or face value" },
+        "submissionDate": { "type": "string", "format": "date-time", "description": "When the case was submitted" },
+        "lastFollowUp": { "type": "string", "format": "date-time", "description": "Last follow-up date" },
+        "nextFollowUp": { "type": "string", "format": "date-time", "description": "Scheduled next follow-up date" },
+        "ownerId": { "type": "string", "description": "UID of the agent who owns this case" },
+        "notes": { "type": "string", "description": "General notes for the case" }
+      },
+      "required": ["clientName", "policyType", "status", "ownerId"]
+    },
+    "FollowUp": {
+      "title": "Follow-up Record",
+      "description": "A record of a follow-up action taken for a case",
+      "type": "object",
+      "properties": {
+        "caseId": { "type": "string", "description": "ID of the associated case" },
+        "date": { "type": "string", "format": "date-time", "description": "Date of follow-up" },
+        "notes": { "type": "string", "description": "Notes from the follow-up" },
+        "actionTaken": { "type": "string", "description": "What action was taken (e.g., Call, Email)" },
+        "ownerId": { "type": "string", "description": "UID of the agent" }
+      },
+      "required": ["caseId", "date", "ownerId"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "agent"] }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/cases/{caseId}": {
+      "schema": "Case",
+      "description": "Collection of insurance cases"
+    },
+    "/cases/{caseId}/followUps/{followUpId}": {
+      "schema": "FollowUp",
+      "description": "Subcollection of follow-up records for a specific case"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    }
+  }
+}
