@@ -18,11 +18,18 @@ export interface FollowUpLogEntry {
   timestamp: string;
 }
 
+export interface CaseManagerContact {
+  id: string;
+  name: string;
+  email: string;
+  link: string;
+}
+
 export interface Case {
   id: string; // Case ID / Link to carrier life book
   clientName: string;
-  role: Role;
-  caseType: CaseType;
+  role: string; // Changed to string to support custom typing
+  caseType: string; // Changed to string to support custom typing
   subCategory: string;
   status: Status;
   priority: Priority;
@@ -35,6 +42,8 @@ export interface Case {
   updatedAt: string;
   archived: boolean;
 }
+
+export const DEFAULT_SPREADSHEET_LINK = "https://docs.google.com/spreadsheets/d/1PZnXeUD0v-PiB0yDjTOh8L6v4H078guQ/edit?usp=drive_link&ouid=114864180385233192486&rtpof=true&sd=true";
 
 export const SMD_BASE_SUBCATEGORIES = [
   'Agent Onboarding',

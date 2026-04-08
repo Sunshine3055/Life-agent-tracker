@@ -21,7 +21,10 @@ import {
   Calendar as CalendarIcon,
   ArrowUpRight,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Users,
+  Link as LinkIcon,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isAfter, isBefore, startOfDay, isToday, parseISO } from 'date-fns';
@@ -52,7 +55,9 @@ import {
   CASE_MANAGERS, 
   STATUS_COLORS, 
   PRIORITY_COLORS,
-  ASSISTANT_EMAIL
+  ASSISTANT_EMAIL,
+  CaseManagerContact,
+  DEFAULT_SPREADSHEET_LINK
 } from './types';
 
 // --- Utilities ---
@@ -61,6 +66,95 @@ function cn(...inputs: ClassValue[]) {
 }
 
 // --- Components ---
+
+const Combobox = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "Select or type...",
+  className 
+}: { 
+  options: string[]; 
+  value: string; 
+  onChange: (val: string) => void; 
+  placeholder?: string;
+  className?: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  const filteredOptions = options.filter(opt => 
+    opt.toLowerCase().includes(inputValue.toLowerCase())
+  );
+
+  return (
+    <div className={cn("relative", className)}>
+      <div className="relative">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={placeholder}
+          className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#0066FF] outline-none pr-8"
+        />
+        <button 
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
+          <ChevronDown size={16} />
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <div 
+              className="fixed inset-0 z-10" 
+              onClick={() => setIsOpen(false)} 
+            />
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto"
+            >
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((opt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
+                    onClick={() => {
+                      onChange(opt);
+                      setInputValue(opt);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {opt}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-gray-400 italic">
+                  Press enter to use custom value
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const Badge = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider", className)}>
@@ -287,7 +381,7 @@ function CaseTable({ cases, onSelect, selectedId }: { cases: Case[]; onSelect: (
   );
 }
 
-function CaseDetail({ caseData, onClose, onEdit, onDelete, onAddLog, onUpdateStatus, onAppendNote }: { 
+function CaseDetail({ caseData, onClose, onEdit, onDelete, onAddLog, onUpdateStatus, onAppendNote, contacts }: { 
   caseData: Case; 
   onClose: () => void;
   onEdit: () => void;
@@ -295,8 +389,12 @@ function CaseDetail({ caseData, onClose, onEdit, onDelete, onAddLog, onUpdateSta
   onAddLog: () => void;
   onUpdateStatus: (status: Status) => void;
   onAppendNote: (note: string) => void;
+  contacts: CaseManagerContact[];
 }) {
   const [noteInput, setNoteInput] = useState('');
+  
+  const contact = contacts.find(c => c.name === caseData.caseManager);
+  const contactLink = contact?.link || DEFAULT_SPREADSHEET_LINK;
 
   return (
     <div className="flex flex-col h-full">
@@ -341,12 +439,24 @@ function CaseDetail({ caseData, onClose, onEdit, onDelete, onAddLog, onUpdateSta
           <div className="col-span-2">
             <div className="flex items-center justify-between">
               <DetailItem label="Case Manager" value={caseData.caseManager} />
-              <a 
-                href={`mailto:${ASSISTANT_EMAIL}?subject=Inquiry: Case ${caseData.id} - ${caseData.clientName}`}
-                className="flex items-center gap-1.5 text-[10px] font-bold text-[#0066FF] uppercase tracking-widest hover:underline"
-              >
-                <Mail size={12} /> Contact Assistant
-              </a>
+              <div className="flex items-center gap-3">
+                {contact?.email && (
+                  <a 
+                    href={`mailto:${contact.email}?subject=Inquiry: Case ${caseData.id} - ${caseData.clientName}`}
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-[#0066FF] uppercase tracking-widest hover:underline"
+                  >
+                    <Mail size={12} /> Email
+                  </a>
+                )}
+                <a 
+                  href={contactLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-[10px] font-bold text-[#0066FF] uppercase tracking-widest hover:underline"
+                >
+                  <ExternalLink size={12} /> Spreadsheet Link
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -453,22 +563,23 @@ function DetailItem({ label, value, color, bold }: { label: string; value: strin
   );
 }
 
-function CaseDrawer({ onClose, onSubmit, initialData }: { onClose: () => void; onSubmit: (data: any) => void; initialData?: Case | null }) {
+function CaseDrawer({ onClose, onSubmit, initialData, contacts }: { onClose: () => void; onSubmit: (data: any) => void; initialData?: Case | null; contacts: CaseManagerContact[] }) {
   const [formData, setFormData] = useState({
     id: initialData?.id || '',
     clientName: initialData?.clientName || '',
-    role: initialData?.role || 'SMD Base' as Role,
-    caseType: initialData?.caseType || 'Life Policy' as CaseType,
+    role: initialData?.role || 'SMD Base',
+    caseType: initialData?.caseType || 'Life Policy',
     subCategory: initialData?.subCategory || SMD_BASE_SUBCATEGORIES[0],
     status: initialData?.status || 'Pending' as Status,
     priority: initialData?.priority || 'Medium' as Priority,
-    caseManager: initialData?.caseManager || CASE_MANAGERS[0],
+    caseManager: initialData?.caseManager || (contacts.length > 0 ? contacts[0].name : CASE_MANAGERS[0]),
     submissionDate: initialData?.submissionDate || format(new Date(), 'yyyy-MM-dd'),
     nextFollowUpDate: initialData?.nextFollowUpDate || format(new Date(), 'yyyy-MM-dd'),
     notes: initialData?.notes || '',
   });
 
   const subCategories = formData.role === 'SMD Base' ? SMD_BASE_SUBCATEGORIES : LIFE_AGENT_SUBCATEGORIES;
+  const caseManagerOptions = Array.from(new Set([...contacts.map(c => c.name), ...CASE_MANAGERS]));
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -518,44 +629,35 @@ function CaseDrawer({ onClose, onSubmit, initialData }: { onClose: () => void; o
 
             <div className="grid grid-cols-2 gap-4">
               <FormItem label="Role">
-                <select 
-                  className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#0066FF] outline-none"
+                <Combobox 
+                  options={['SMD Base', 'Life Agent']}
                   value={formData.role}
-                  onChange={(e) => {
-                    const newRole = e.target.value as Role;
+                  onChange={(val) => {
                     setFormData({ 
                       ...formData, 
-                      role: newRole,
-                      subCategory: newRole === 'SMD Base' ? SMD_BASE_SUBCATEGORIES[0] : LIFE_AGENT_SUBCATEGORIES[0]
+                      role: val,
+                      subCategory: val === 'SMD Base' ? SMD_BASE_SUBCATEGORIES[0] : LIFE_AGENT_SUBCATEGORIES[0]
                     });
                   }}
-                >
-                  <option value="SMD Base">SMD Base</option>
-                  <option value="Life Agent">Life Agent</option>
-                </select>
+                />
               </FormItem>
               {formData.role !== 'SMD Base' && (
                 <FormItem label="Case Type">
-                  <select 
-                    className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#0066FF] outline-none"
+                  <Combobox 
+                    options={['Life Policy', 'Annuity Policy']}
                     value={formData.caseType}
-                    onChange={(e) => setFormData({ ...formData, caseType: e.target.value as CaseType })}
-                  >
-                    <option value="Life Policy">Life Policy</option>
-                    <option value="Annuity Policy">Annuity Policy</option>
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, caseType: val })}
+                  />
                 </FormItem>
               )}
             </div>
 
             <FormItem label="Sub-Category">
-              <select 
-                className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#0066FF] outline-none"
+              <Combobox 
+                options={subCategories}
                 value={formData.subCategory}
-                onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
-              >
-                {subCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
+                onChange={(val) => setFormData({ ...formData, subCategory: val })}
+              />
             </FormItem>
 
             <div className="grid grid-cols-2 gap-4">
@@ -587,13 +689,11 @@ function CaseDrawer({ onClose, onSubmit, initialData }: { onClose: () => void; o
             </div>
 
             <FormItem label="Case Manager">
-              <select 
-                className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#0066FF] outline-none"
+              <Combobox 
+                options={caseManagerOptions}
                 value={formData.caseManager}
-                onChange={(e) => setFormData({ ...formData, caseManager: e.target.value })}
-              >
-                {CASE_MANAGERS.map(mgr => <option key={mgr} value={mgr}>{mgr}</option>)}
-              </select>
+                onChange={(val) => setFormData({ ...formData, caseManager: val })}
+              />
             </FormItem>
 
             <div className="grid grid-cols-2 gap-4">
@@ -763,13 +863,134 @@ function FormItem({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
+function ContactManager({ 
+  contacts, 
+  onAdd, 
+  onUpdate, 
+  onDelete, 
+  onClose 
+}: { 
+  contacts: CaseManagerContact[]; 
+  onAdd: (c: Omit<CaseManagerContact, 'id'>) => void; 
+  onUpdate: (id: string, c: Partial<CaseManagerContact>) => void; 
+  onDelete: (id: string) => void; 
+  onClose: () => void;
+}) {
+  const [newContact, setNewContact] = useState({ name: '', email: '', link: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      />
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="relative w-full max-w-2xl bg-white rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+      >
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <h2 className="text-lg font-display font-bold">Case Manager Contacts</h2>
+          <IconButton icon={X} onClick={onClose} />
+        </div>
+
+        <div className="p-6 overflow-y-auto space-y-6">
+          {/* Add Form */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">Add New Contact</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <input 
+                placeholder="Name"
+                className="border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-[#0066FF]"
+                value={newContact.name}
+                onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+              />
+              <input 
+                placeholder="Email"
+                className="border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-[#0066FF]"
+                value={newContact.email}
+                onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+              />
+              <input 
+                placeholder="Spreadsheet/Custom Link"
+                className="border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-[#0066FF]"
+                value={newContact.link}
+                onChange={(e) => setNewContact({ ...newContact, link: e.target.value })}
+              />
+            </div>
+            <button 
+              onClick={() => {
+                if (newContact.name) {
+                  onAdd(newContact);
+                  setNewContact({ name: '', email: '', link: '' });
+                }
+              }}
+              className="w-full py-2 bg-[#0066FF] text-white rounded text-xs font-bold uppercase tracking-widest hover:bg-[#0052CC]"
+            >
+              Add Contact Record
+            </button>
+          </div>
+
+          {/* List */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">Existing Records</h3>
+            {contacts.map(c => (
+              <div key={c.id} className="flex items-center justify-between p-3 border border-gray-100 rounded hover:bg-gray-50 transition-colors">
+                <div className="flex-1 grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Name</p>
+                    <p className="text-sm font-bold">{c.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Email</p>
+                    <p className="text-xs font-mono">{c.email || 'N/A'}</p>
+                  </div>
+                  <div className="truncate">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Link</p>
+                    <a href={c.link || DEFAULT_SPREADSHEET_LINK} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0066FF] hover:underline truncate block">
+                      {c.link ? 'Custom Link' : 'Default Spreadsheet'}
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 ml-4">
+                  <IconButton icon={Trash2} size={14} onClick={() => onDelete(c.id)} className="text-red-400 hover:text-red-600" />
+                </div>
+              </div>
+            ))}
+            {contacts.length === 0 && (
+              <p className="text-center py-8 text-gray-400 text-xs font-mono">NO CONTACT RECORDS FOUND</p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { cases, addCase, updateCase, deleteCase, addFollowUp, appendNote } = useCases();
+  const { 
+    cases, 
+    contacts,
+    addCase, 
+    updateCase, 
+    deleteCase, 
+    addFollowUp, 
+    appendNote,
+    addContact,
+    updateContact,
+    deleteContact
+  } = useCases();
   const [activeView, setActiveView] = useState<'dashboard' | 'cases' | 'due'>('dashboard');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<Case | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [isContactManagerOpen, setIsContactManagerOpen] = useState(false);
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -881,6 +1102,16 @@ export default function App() {
             active={roleFilter === 'Life Agent'}
             onClick={() => setRoleFilter(roleFilter === 'Life Agent' ? 'All' : 'Life Agent')}
           />
+
+          <div className="pt-6 pb-2 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Directory</div>
+          <button 
+            onClick={() => setIsContactManagerOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded text-xs font-bold uppercase tracking-tight text-gray-500 hover:bg-gray-50 transition-all"
+          >
+            <Users size={14} className="text-gray-400" />
+            <span className="flex-1 text-left">Case Managers</span>
+            <span className="text-[10px] font-mono opacity-60">{contacts.length}</span>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-200">
@@ -962,6 +1193,7 @@ export default function App() {
                       onAddLog={() => setIsFollowUpModalOpen(true)}
                       onUpdateStatus={(status) => updateCase(selectedCase.id, { status })}
                       onAppendNote={(note) => appendNote(selectedCase.id, note)}
+                      contacts={contacts}
                     />
                   </motion.div>
                 )}
@@ -985,6 +1217,7 @@ export default function App() {
               setIsDrawerOpen(false);
             }}
             initialData={editingCase}
+            contacts={contacts}
           />
         )}
         {isFollowUpModalOpen && selectedCase && (
@@ -994,6 +1227,15 @@ export default function App() {
               addFollowUp(selectedCase.id, entry);
               setIsFollowUpModalOpen(false);
             }}
+          />
+        )}
+        {isContactManagerOpen && (
+          <ContactManager 
+            contacts={contacts}
+            onAdd={addContact}
+            onUpdate={updateContact}
+            onDelete={deleteContact}
+            onClose={() => setIsContactManagerOpen(false)}
           />
         )}
       </AnimatePresence>
